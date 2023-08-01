@@ -1,6 +1,6 @@
 /* === This file is part of Calamares - <https://calamares.io> ===
  *
- *   SPDX-FileCopyrightText: 2023 Sławomir Lach <slawek@lach.art.pl>
+ *   SPDX-FileCopyrightText: 2019 Adriaan de Groot <groot@kde.org>
  *   SPDX-License-Identifier: GPL-3.0-or-later
  *
  *   Calamares is Free Software: see the License-Identifier above.
@@ -11,37 +11,37 @@
 #define ITEMFLATPAK_H
 
 #include <QString>
-#include <QVariant>
 #include <QVector>
+#include <QVariant>
 
 class PackageItem
 {
 public:
-    PackageItem( QString appstreamid )
-        : m_appstreamid( appstreamid )
-        , m_installed( false )
+    PackageItem(QString appstreamid):
+       appstreamid(appstreamid),
+       installed(false)
     {
-    }
-    QString getAppStreamId( ) const { return m_appstreamid; }
-    void setInstalled( bool installed )  { m_installed = installed; }
-    bool getInstalled( ) const { return m_installed; }
 
+    }
+    QString& getAppStreamId(void)
+    {
+        return this->appstreamid;
+    }
+    void setInstalled(bool installed)
+    {
+        this->installed = installed;
+    }
+    bool getInstalled(void)
+    {
+        return this->installed;
+    }
 private:
-    QString m_appstreamid;
-    bool m_installed;
+    QString appstreamid;
+    bool installed;
 };
 
-class InstalledList {
-private:
-    QStringList installed;
-public:
-    InstalledList();
-    ~InstalledList();
 
-    bool contains(QString string) {
-        return installed.contains(string);
-    }
-};
 
-PackageItem fromFlatpak( const QVariantMap& map, InstalledList &installed );
+PackageItem fromFlatpak( const QVariantMap& map );
+
 #endif

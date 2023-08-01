@@ -1,67 +1,32 @@
-/* === This file is part of Calamares - <https://calamares.io> ===
- *
- *   SPDX-FileCopyrightText: 2023 Sławomir Lach <slawek@lach.art.pl>
- *   SPDX-License-Identifier: GPL-3.0-or-later
- *
- *   Calamares is Free Software: see the License-Identifier above.
- *
- */
-
-/* Qt */
+#include <sys/wait.h>
+#include <unistd.h>
 #include <QVariantMap>
 
-/* CPP */
-#include <fstream>
-#include <iostream>
-
-/* Calamares */
-#include "utils/CalamaresUtilsSystem.h"
-
-/* Module */
-#include "ItemFlatpak.h"
 #include "utils/Logger.h"
 #include "utils/Variant.h"
+#include "ItemFlatpak.h"
 
 PackageItem
-fromFlatpak( const QVariantMap& itemMap, InstalledList &installed )
+fromFlatpak( const QVariantMap& item_map )
 {
-    // check if it is installed
-    PackageItem item( CalamaresUtils::getString( itemMap, "appstream" ) );
-    item.setInstalled( false );
+   // check if it is installed
+   PackageItem item(CalamaresUtils::getString( item_map, "appstream" ));
+   int status;
+   int pid = fork();
+   if (0 == pid)
+   {
+      execlp("flatpak", "flatpak", "info", item.getAppStreamId().toStdString().c_str(), NULL);
+   }
+   waitpid(pid, &status, 0);
 
-    // set to installed if appstream id of itemMap is inside installed list
-    item.setInstalled( installed.contains( CalamaresUtils::getString( itemMap, "appstream" ) ) );
+   if (WEXITSTATUS(status) == 0)
+   {
+     item.setInstalled(true);
+   }
+   else
+   {
+     item.setInstalled(false);
+   }
 
-    return item;
-}
-
-InstalledList::InstalledList()
-{
-    long long int prev_pos;
-    long long int pos = 0;
-    QString line;
-    auto process = CalamaresUtils::System::instance()->targetEnvCommand(
-        QStringList { QString::fromLatin1( "flatpak" ),
-                      QString::fromLatin1( "list" ),
-                      QString::fromLatin1( "--app" ),
-                      QString::fromLatin1( "--columns=application" ) } );
-    auto outputStr = process.second;
-
-    do {
-        prev_pos = pos;
-
-        pos = outputStr.indexOf('\n', prev_pos);
-        QString line = outputStr.mid(prev_pos, pos);
-        installed.append(line);
-
-        /* Increase by 1 to not stuck on newline */
-        ++pos;
-
-    /* QString::indexOf returns -1 since no occurences. 0 = -1 + 1.*/
-    } while (0 != pos);
-}
-
-InstalledList::~InstalledList()
-{
-    installed.clear();
+   return item;
 }

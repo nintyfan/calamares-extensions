@@ -1,11 +1,5 @@
-/* === This file is part of Calamares - <https://calamares.io> ===
- *
- *   SPDX-FileCopyrightText: 2023 Sławomir Lach <slawek@lach.art.pl>
- *   SPDX-License-Identifier: GPL-3.0-or-later
- *
- *   Calamares is Free Software: see the License-Identifier above.
- */
 
+#include <ext/stdio_filebuf.h>
 #include <fstream>
 #include <iostream>
 
@@ -22,57 +16,52 @@
 #include "utils/Logger.h"
 #include "utils/Variant.h"
 #include "ItemFlatpak.h"
-#include "PackagePool.h"
 
-#include "utils/CalamaresUtilsSystem.h"
 
-void PackagePool::downloadPackagesInfo(InstalledList &list)
+void serializePackagesInfo(void);
+
+QVector < PackageItem > packages;
+
+void downloadPackagesInfo(void)
 {
-    QHash<QString,bool> addedPackages;
-    QString line;
-    auto process = CalamaresUtils::System::instance()->targetEnvCommand( QStringList { QString::fromStdString( "flatpak" ), QString::fromStdString( "remotes" ), QString::fromStdString( "--columns=name" ) });
-    auto outputStr = process.second;
-    QTextStream output(&outputStr);
+    int pid;
+    int pipefd[2];
+    bool poolOk = false;
+    pipe(pipefd);
 
-    while (output.readLineInto(&line))
+    pid = fork();
+    if (0 == pid)
     {
-        QString line2;
-        auto process2 = CalamaresUtils::System::instance()->targetEnvCommand(
-            QStringList { QString::fromStdString( "flatpak" ),
-                          QString::fromStdString( "remote-ls" ),
-                          QString::fromStdString( "--app" ),
-                          QString::fromStdString( "--columns=application" ),
-                          line } );
-        auto output2Str = process2.second;
-        QTextStream output2( &output2Str );
-
-        while ( output2.readLineInto( &line2 ) )
-        {
-            if ( line2 == "" )
-            {
-                continue;
-            }
-            QVariantMap itemMap;
-
-            if ( addedPackages.contains( line2 ) )
-            {
-                continue;
-            }
-
-            addedPackages.insert( line2, true );
-
-            itemMap.insert( "appstream", QVariant( line2 ) );
-            itemMap.insert( "id", QVariant( line2 ) );
-
-            PackageItem item = fromFlatpak( itemMap, list );
-            packages.append( item );
-        }
+        close(pipefd[0]);
+        dup2(pipefd[1], 1);
+        execlp("flatpak", "flatpak", "search", "--columns=application", "", NULL);
+        exit(1);
     }
+    close(pipefd[1]);
+
+    std::string line;
+    __gnu_cxx::stdio_filebuf<char> filebuf(pipefd[0], std::ios::in);
+    std::istream stream(&filebuf);
+
+    while (!stream.eof())
+    {
+      getline(stream, line);
+      QVariantMap item_map;
+
+      //std::cerr << line;
+      item_map.insert("appstream", QVariant(QString::fromStdString(line)));
+      item_map.insert("id", QVariant(QString::fromStdString(line)));
+
+      PackageItem item = fromFlatpak(item_map);
+      packages.append(item);
+    }
+
+    waitpid(pid, nullptr, 0);
 
     serializePackagesInfo();
 }
 
-void PackagePool::serializePackagesInfo()
+void serializePackagesInfo(void)
 {
         QList<QVariant> changedValue;
         auto* gs = Calamares::JobQueue::instance()->globalStorage();
@@ -89,16 +78,6 @@ void PackagePool::serializePackagesInfo()
                QVariantMap newValue;
                newValue.insert("name", current.getAppStreamId());
 
-               if (current.getInstalled())
-               {
-                 newValue.insert("selected", true);
-                 newValue.insert("immutable", true);
-                 newValue.insert("description", "[Already installed; cannot be uninstalled]");
-               }
-               else
-               {
-                 newValue.insert("selected", false);
-               }
                selfInstall.append(current.getAppStreamId());
                newValue.insert("packages", selfInstall);
                changedValue.append(newValue);
