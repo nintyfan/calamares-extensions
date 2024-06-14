@@ -9,7 +9,7 @@
 
 #include "FlatpakInfoJob.h"
 
-#include "utils/CalamaresUtilsSystem.h"
+#include "utils/Runner.h"
 #include "utils/Logger.h"
 #include "utils/Variant.h"
 
